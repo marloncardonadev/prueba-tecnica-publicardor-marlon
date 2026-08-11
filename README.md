@@ -65,3 +65,62 @@ Nos importará especialmente:
 
 Construye la versión más pequeña que haga que alguien quiera seguir usándola.
 
+---
+
+## Cómo compilar y ejecutar la demo
+
+Requiere GnuCOBOL 3.x (`cobc`) en el PATH. Todos los comandos se ejecutan desde la raíz del repositorio (varios programas usan rutas relativas como `config/linkedin.cfg` u `outputs/simulated-posts/`, que se resuelven contra el directorio desde el que se lanza el binario, no contra la ubicación del `.cbl`).
+
+`CONTENT-PIPELINE.cbl` orquesta 4 agentes (`VOICE-GEN`, `CONTENT-GEN`, `IMAGE-SEL`, `VIRALITY-SCORE`, en [src/agents/](src/agents/)) llamándolos por `CALL` dinámico — por eso cada uno se compila como **módulo enlazable** (`-m`), no como ejecutable, y el orquestador los resuelve en tiempo de ejecución vía `COB_LIBRARY_PATH`.
+
+```bash
+mkdir -p build
+
+# 1. Compilar los 4 agentes como modulos enlazables
+cobc -m -I src/copybooks -o build/VOICE-GEN      src/agents/VOICE-GEN.cbl
+cobc -m -I src/copybooks -o build/CONTENT-GEN    src/agents/CONTENT-GEN.cbl
+cobc -m -I src/copybooks -o build/IMAGE-SEL      src/agents/IMAGE-SEL.cbl
+cobc -m -I src/copybooks -o build/VIRALITY-SCORE src/agents/VIRALITY-SCORE.cbl
+
+# 2. Compilar el orquestador como ejecutable
+cobc -x -I src/copybooks -o build/CONTENT-PIPELINE src/pipeline/CONTENT-PIPELINE.cbl
+
+# 3. Ejecutar (COB_LIBRARY_PATH le dice al runtime donde buscar los modulos de los agentes)
+COB_LIBRARY_PATH=build ./build/CONTENT-PIPELINE
+```
+
+El programa pide el disparador por consola (`ACCEPT`) y muestra el resultado final (estado, motivo si hubo error, vista previa si quedó `SIMULATED`). Cada transición queda además registrada en `AUDIT_LOG.DAT`, creado en el directorio desde el que se ejecutó.
+
+**Nota de plataforma:** en Windows, `cobc -m` suele generar `.dll` en vez de `.so`; el flag `-o build/NOMBRE` (sin extensión) deja que `cobc` elija la extensión correcta para la plataforma. No se pudo verificar este paso con un compilador real en el entorno donde se escribió este código — si `COB_LIBRARY_PATH` no resuelve los módulos, revisar con `cobc --info` qué extensión y convención usa tu instalación.
+
+---
+
+## PUBLISH-SIM.cbl
+
+Implementa el paso de publicación del pipeline ([design.md](design.md), sección 2.7 — `PublicationAgent`). Construye el payload exacto de la [LinkedIn UGC Post API](https://api.linkedin.com/v2/ugcPosts) (endpoint, headers, body) y luego decide qué hacer con él según si hay credenciales configuradas:
+
+- **Sin `ACCESS_TOKEN` en `config/linkedin.cfg`** (el caso por defecto de esta demo, ver `requirements.md` REQ-E1): escribe ese mismo payload en `outputs/simulated-posts/{content_id}.json`, envuelto en un registro con `"simulation": true` y `"content_state": "SIMULATED"`. Nunca se llama a la red real.
+- **Con `ACCESS_TOKEN` presente**: intenta el POST real vía un adaptador `HTTP-BRIDGE` (aún no implementado en este repositorio, ver `tasks.md` tarea F2-01). Si el adaptador no está disponible o LinkedIn no responde `201`, el resultado queda en estado `ERROR` con motivo explícito — nunca se marca `PUBLISHED` salvo una respuesta real y exitosa de LinkedIn.
+
+### Compilar y ejecutar
+
+No depende de ningún copybook ni de los agentes de arriba — se compila solo. Igual que el resto, se ejecuta desde la raíz del repo (usa rutas relativas a `config/linkedin.cfg` y `outputs/simulated-posts/`).
+
+```bash
+mkdir -p build
+cobc -x -o build/PUBLISH-SIM src/pipeline/PUBLISH-SIM.cbl
+./build/PUBLISH-SIM
+```
+
+El contenido de entrada (texto, imagen, `content_id`) está fijo en `WORKING-STORAGE` en esta v1; conectarlo a la salida real de `CONTENT-PIPELINE.cbl` es la extensión natural siguiente.
+
+### Qué hace falta para pasar a modo real
+
+Para que el intento de publicación real funcione contra una cuenta de LinkedIn genuina, hacen falta tres cosas que esta demo **no tiene ni pide**:
+
+1. **Client ID y Client Secret** de una app registrada en el [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps), con el producto "Share on LinkedIn" (o "Community Management API") habilitado.
+2. **Un token OAuth 2.0 con el scope `w_member_social`** — es el permiso que autoriza crear posts en nombre de la cuenta autenticada. Se obtiene completando el flujo de autorización de LinkedIn (redirect + intercambio de código por token) con el Client ID/Secret del punto anterior.
+3. **El URN del autor**, que no es una credencial en sí pero es un prerrequisito real: antes de poder publicar hay que resolver `urn:li:person:{id}` llamando a `/v2/userinfo` (o `/v2/me`) con ese mismo token. `PUBLISH-SIM.cbl` deja ese campo como `{PENDING_OAUTH_ME}` en el payload simulado precisamente porque no hay token con el cual resolverlo.
+
+Con las tres cosas disponibles, basta con completar `config/linkedin.cfg` (`ACCESS_TOKEN=...`) y tener `HTTP-BRIDGE` implementado (tarea F2-01) para que la misma ejecución de `PUBLISH-SIM.cbl` tome la rama real en vez de la simulada — el código de ambas rutas ya existe y comparte la construcción del payload.
+

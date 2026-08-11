@@ -1,0 +1,35 @@
+      *> IMAGE-SEL.CUT
+      *> Suite de cobol-unit-test para src/agents/IMAGE-SEL.cbl, llamado
+      *> directamente. Mismo aviso que en test/CONTENT-PIPELINE.CUT: no
+      *> se pudo correr contra el framework real en este entorno.
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. IMAGE-SEL-TEST.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY "IMAGE-SEL-IO.cpy".
+
+       PROCEDURE DIVISION.
+
+           TESTSUITE 'IMAGE-SEL - seleccion de imagen por palabra clave'
+
+           TESTCASE 'Disparador sin IA: elige la imagen generica de mainframe'
+           MOVE SPACES TO IMAGE-SEL-REQUEST
+           MOVE SPACES TO IMAGE-SEL-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos' TO ISEL-TRIGGER-TEXT
+           CALL 'IMAGE-SEL' USING IMAGE-SEL-REQUEST IMAGE-SEL-RESPONSE
+           EXPECT ISEL-STEP-STATUS TO BE 'Y'
+           EXPECT ISEL-IMAGE-REF TO BE 'img-mainframe-terminal-verde.png'
+
+           TESTCASE 'Disparador con IA: elige la imagen de IA/legacy bridge'
+           MOVE SPACES TO IMAGE-SEL-REQUEST
+           MOVE SPACES TO IMAGE-SEL-RESPONSE
+           MOVE 'Modernizacion de COBOL con IA aplicada a sistemas legacy' TO ISEL-TRIGGER-TEXT
+           CALL 'IMAGE-SEL' USING IMAGE-SEL-REQUEST IMAGE-SEL-RESPONSE
+           EXPECT ISEL-STEP-STATUS TO BE 'Y'
+           EXPECT ISEL-IMAGE-REF TO BE 'img-ia-legacy-bridge.png'
+
+           GOBACK.

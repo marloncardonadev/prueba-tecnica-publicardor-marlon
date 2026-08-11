@@ -1,0 +1,62 @@
+      *> CONTENT-GEN.CUT
+      *> Suite de cobol-unit-test para src/agents/CONTENT-GEN.cbl,
+      *> llamado directamente (sin mocks: aqui es donde se verifica la
+      *> logica real, no en CONTENT-PIPELINE.CUT). Mismo aviso que en
+      *> test/CONTENT-PIPELINE.CUT: no se pudo correr contra el
+      *> framework real en este entorno.
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CONTENT-GEN-TEST.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY "CONTENT-GEN-IO.cpy".
+
+       PROCEDURE DIVISION.
+
+           TESTSUITE 'CONTENT-GEN - generacion de texto por intento'
+
+           TESTCASE 'Intento inicial: usa la plantilla base sin importar el gancho de boost'
+           MOVE SPACES TO CONTENT-GEN-REQUEST
+           MOVE SPACES TO CONTENT-GEN-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos' TO CG-TRIGGER-TEXT
+           MOVE 0 TO CG-REGEN-COUNT
+           MOVE 'Y' TO CG-REGEN-BOOST-ENABLED
+           CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+           EXPECT CG-STEP-STATUS TO BE 'Y'
+           EXPECT CG-GENERATED-TEXT TO BE 'Cultura de equipos que mantienen sistemas antiguos. Si tu shop de mainframe sigue discutiendo esto en reuniones, ya perdio el primer semestre.'
+
+           TESTCASE 'Reintento con boost habilitado: usa la plantilla con mas terminos del territorio'
+           MOVE SPACES TO CONTENT-GEN-REQUEST
+           MOVE SPACES TO CONTENT-GEN-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos' TO CG-TRIGGER-TEXT
+           MOVE 1 TO CG-REGEN-COUNT
+           MOVE 'Y' TO CG-REGEN-BOOST-ENABLED
+           CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+           EXPECT CG-STEP-STATUS TO BE 'Y'
+           EXPECT CG-GENERATED-TEXT TO BE 'Cultura de equipos que mantienen sistemas antiguos. Modernizar COBOL con IA no es reescribir: es entender el legacy antes de tocarlo.'
+
+           TESTCASE 'Reintento con boost deshabilitado: sigue usando la plantilla base'
+           MOVE SPACES TO CONTENT-GEN-REQUEST
+           MOVE SPACES TO CONTENT-GEN-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos' TO CG-TRIGGER-TEXT
+           MOVE 1 TO CG-REGEN-COUNT
+           MOVE 'N' TO CG-REGEN-BOOST-ENABLED
+           CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+           EXPECT CG-STEP-STATUS TO BE 'Y'
+           EXPECT CG-GENERATED-TEXT TO BE 'Cultura de equipos que mantienen sistemas antiguos. Si tu shop de mainframe sigue discutiendo esto en reuniones, ya perdio el primer semestre.'
+
+           TESTCASE 'Disparador largo desborda el post corto y falla con motivo explicito'
+           MOVE SPACES TO CONTENT-GEN-REQUEST
+           MOVE SPACES TO CONTENT-GEN-RESPONSE
+           MOVE 'Por que los comites de arquitectura que deciden reemplazar sistemas mainframe completos en un solo proyecto de dieciocho meses casi nunca preguntan primero cuales batch jobs de cierre de mes dependen'
+               TO CG-TRIGGER-TEXT
+           MOVE 0 TO CG-REGEN-COUNT
+           MOVE 'Y' TO CG-REGEN-BOOST-ENABLED
+           CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+           EXPECT CG-STEP-STATUS TO BE 'N'
+           EXPECT CG-STEP-ERROR-MSG TO BE 'El texto generado supera el limite de un post corto'
+
+           GOBACK.

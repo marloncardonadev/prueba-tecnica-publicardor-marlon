@@ -1,0 +1,227 @@
+      *> CONTENT-PIPELINE.CUT
+      *> Suite de cobol-unit-test (github.com/neopragma/cobol-unit-test)
+      *> para src/pipeline/CONTENT-PIPELINE.cbl.
+      *>
+      *> AVISO HONESTO: no hay cobc ni cobol-unit-test instalados en el
+      *> entorno donde se escribio este archivo, asi que no pudo correrse
+      *> a traves del framework real. La sintaxis (TESTSUITE/TESTCASE/
+      *> PERFORM/EXPECT/MOCK/VERIFY) sigue la documentada por esa
+      *> herramienta, pero no pude confirmar contra una instalacion real
+      *> detalles como si MOCK admite logica condicional en su cuerpo
+      *> (la uso para diferenciar el 1er intento del reintento), o si
+      *> VERIFY soporta 'NEVER HAPPENED'/'HAPPENED N TIMES' con esa
+      *> sintaxis exacta.
+      *>
+      *> DESDE la extraccion de VOICE-GEN, CONTENT-GEN, IMAGE-SEL y
+      *> VIRALITY-SCORE como programas propios (src/agents/), esta suite
+      *> ya NO verifica la logica interna de cada agente — eso vive en
+      *> VOICE-GEN.CUT / CONTENT-GEN.CUT / IMAGE-SEL.CUT / VIRALITY-
+      *> SCORE.CUT, cada uno con su propia suite llamando al agente real.
+      *> Aqui se MOCKEA esos cuatro CALL para probar solo la
+      *> ORQUESTACION: que se llame al agente correcto en el momento
+      *> correcto, que un fallo detenga el pipeline en ERROR sin
+      *> ambiguedad, que el reintento por score bajo cuente bien y pare
+      *> cuando corresponde, y que un paso temprano que falla evite
+      *> gastar llamadas en los pasos siguientes. La simulacion de "fallo
+      *> de red en VOICE-GEN" ya no es un flag interno del pipeline: es
+      *> un MOCK de ese CALL, igual que el fallo de CONTENT-GEN.
+      *>
+      *> Los MOCK de CONTENT-GEN/VIRALITY-SCORE en 'reintento exitoso' se
+      *> diferencian por el propio CG-REGEN-COUNT que les pasa
+      *> CONTENT-PIPELINE.cbl (dato real de orquestacion), no por ganchos
+      *> de prueba adicionales: el mock de VIRALITY-SCORE decide LOW/HIGH
+      *> mirando si el texto que le llego es el del intento inicial o el
+      *> del reintento, exactamente como lo haria un contrato real.
+      *>
+      *> Cada TESTCASE llama a 9500-RESET-TEST-STATE antes de fijar sus
+      *> propios datos, porque cobol-unit-test corre todos los TESTCASE de
+      *> un TESTSUITE en un solo programa compilado y el WORKING-STORAGE
+      *> fusionado no se reinicia solo entre casos.
+      *>
+      *> TESTCASE 4 (fallo de red en VOICE-GEN) depende de que el
+      *> TESTSUITE corra en orden: AUDIT-LOG-FILE es de solo-agregar, y
+      *> la verificacion busca la ULTIMA entrada justo despues de ese
+      *> caso puntual, antes de que corra el TESTCASE 5.
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. CONTENT-PIPELINE-TEST.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+
+       01  WS-TEST-FIELDS.
+           05  WS-LAST-AUDIT-FROM-STATE   PIC X(20) VALUE SPACES.
+           05  WS-LAST-AUDIT-TO-STATE     PIC X(20) VALUE SPACES.
+           05  WS-TEST-EOF                PIC X     VALUE 'N'.
+
+       PROCEDURE DIVISION.
+
+           TESTSUITE 'CONTENT-PIPELINE - orquestacion, reintentos y auditoria'
+
+           TESTCASE 'Happy path completo: los tres agentes responden OK a la primera, llega a SIMULATED'
+           PERFORM 9500-RESET-TEST-STATE
+           MOVE 'Modernizacion de COBOL con IA aplicada a sistemas legacy'
+               TO WS-TRIGGER-TEXT
+
+           MOCK CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+               MOVE 'texto de ejemplo con buena senal' TO CG-GENERATED-TEXT
+               MOVE 'Y' TO CG-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'IMAGE-SEL' USING IMAGE-SEL-REQUEST IMAGE-SEL-RESPONSE
+               MOVE 'img-mock.png' TO ISEL-IMAGE-REF
+               MOVE 'Y' TO ISEL-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+               MOVE 'HIGH' TO VS-VIRALITY-LEVEL
+               MOVE 'Y' TO VS-STEP-STATUS
+           END-MOCK
+
+           PERFORM 0500-RUN-PIPELINE
+           EXPECT STATUS-CODE TO BE 'SIMULATED'
+           EXPECT WS-REGEN-COUNT TO BE 0
+           EXPECT WS-SIMULATED-PREVIEW NOT TO BE SPACES
+           EXPECT WS-ERROR-REASON TO BE SPACES
+           VERIFY CALL 'CONTENT-GEN' HAPPENED 1 TIMES
+           VERIFY CALL 'IMAGE-SEL' HAPPENED 1 TIMES
+           VERIFY CALL 'VIRALITY-SCORE' HAPPENED 1 TIMES
+
+           TESTCASE 'Score bajo con reintento exitoso: LOW en el 1er intento, HIGH en el reintento, llega a SIMULATED'
+           PERFORM 9500-RESET-TEST-STATE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos'
+               TO WS-TRIGGER-TEXT
+
+           MOCK CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+               IF CG-REGEN-COUNT = 0
+                   MOVE 'texto-intento-inicial' TO CG-GENERATED-TEXT
+               ELSE
+                   MOVE 'texto-regenerado-mejor' TO CG-GENERATED-TEXT
+               END-IF
+               MOVE 'Y' TO CG-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'IMAGE-SEL' USING IMAGE-SEL-REQUEST IMAGE-SEL-RESPONSE
+               MOVE 'img-mock.png' TO ISEL-IMAGE-REF
+               MOVE 'Y' TO ISEL-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+               IF VS-GENERATED-TEXT = 'texto-intento-inicial'
+                   MOVE 'LOW' TO VS-VIRALITY-LEVEL
+               ELSE
+                   MOVE 'HIGH' TO VS-VIRALITY-LEVEL
+               END-IF
+               MOVE 'Y' TO VS-STEP-STATUS
+           END-MOCK
+
+           PERFORM 0500-RUN-PIPELINE
+           EXPECT STATUS-CODE TO BE 'SIMULATED'
+           EXPECT WS-REGEN-COUNT TO BE 1
+           VERIFY CALL 'CONTENT-GEN' HAPPENED 2 TIMES
+           VERIFY CALL 'VIRALITY-SCORE' HAPPENED 2 TIMES
+
+           TESTCASE 'Score bajo agotando reintentos: siempre LOW, termina DISCARDED tras 2 reintentos'
+           PERFORM 9500-RESET-TEST-STATE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos'
+               TO WS-TRIGGER-TEXT
+
+           MOCK CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+               MOVE 'texto que nunca mejora' TO CG-GENERATED-TEXT
+               MOVE 'Y' TO CG-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'IMAGE-SEL' USING IMAGE-SEL-REQUEST IMAGE-SEL-RESPONSE
+               MOVE 'img-mock.png' TO ISEL-IMAGE-REF
+               MOVE 'Y' TO ISEL-STEP-STATUS
+           END-MOCK
+
+           MOCK CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+               MOVE 'LOW' TO VS-VIRALITY-LEVEL
+               MOVE 'Y' TO VS-STEP-STATUS
+           END-MOCK
+
+           PERFORM 0500-RUN-PIPELINE
+           EXPECT STATUS-CODE TO BE 'DISCARDED'
+           EXPECT WS-REGEN-COUNT TO BE 2
+           VERIFY CALL 'CONTENT-GEN' HAPPENED 3 TIMES
+           VERIFY CALL 'VIRALITY-SCORE' HAPPENED 3 TIMES
+
+           TESTCASE 'Fallo de red en VOICE-GEN: termina en ERROR, auditado, y no gasta llamadas en los agentes siguientes'
+           PERFORM 9500-RESET-TEST-STATE
+           MOVE 'Modernizacion de COBOL con IA aplicada a sistemas legacy'
+               TO WS-TRIGGER-TEXT
+
+           MOCK CALL 'VOICE-GEN' USING VOICE-GEN-REQUEST VOICE-GEN-RESPONSE
+               MOVE 'N' TO VG-STEP-STATUS
+               MOVE 'GEN-2001: fallo de red aplicando el perfil de voz (VOICE-GEN)'
+                   TO VG-STEP-ERROR-MSG
+           END-MOCK
+
+           PERFORM 0500-RUN-PIPELINE
+           EXPECT STATUS-CODE TO BE 'ERROR'
+           EXPECT WS-ERROR-REASON TO BE 'GEN-2001: fallo de red aplicando el perfil de voz (VOICE-GEN)'
+           EXPECT WS-AUDIT-WRITE-FAILED TO BE 'N'
+           VERIFY CALL 'VOICE-GEN' HAPPENED 1 TIMES
+           VERIFY CALL 'CONTENT-GEN' NEVER HAPPENED
+           VERIFY CALL 'IMAGE-SEL' NEVER HAPPENED
+           VERIFY CALL 'VIRALITY-SCORE' NEVER HAPPENED
+           PERFORM 9600-READ-LAST-AUDIT-ENTRY
+           EXPECT WS-LAST-AUDIT-FROM-STATE TO BE 'RECEIVED'
+           EXPECT WS-LAST-AUDIT-TO-STATE TO BE 'ERROR'
+
+           TESTCASE 'CONTENT-GEN falla (post largo): bloquea antes de llamar a IMAGE-SEL y VIRALITY-SCORE'
+           PERFORM 9500-RESET-TEST-STATE
+           MOVE 'Cualquier disparador valido para esta prueba de bloqueo temprano'
+               TO WS-TRIGGER-TEXT
+
+           MOCK CALL 'CONTENT-GEN' USING CONTENT-GEN-REQUEST CONTENT-GEN-RESPONSE
+               MOVE 'N' TO CG-STEP-STATUS
+               MOVE 'El texto generado supera el limite de un post corto' TO CG-STEP-ERROR-MSG
+           END-MOCK
+
+           PERFORM 0500-RUN-PIPELINE
+           EXPECT STATUS-CODE TO BE 'ERROR'
+           EXPECT WS-ERROR-REASON TO BE 'El texto generado supera el limite de un post corto'
+           VERIFY CALL 'IMAGE-SEL' NEVER HAPPENED
+           VERIFY CALL 'VIRALITY-SCORE' NEVER HAPPENED
+
+           GOBACK.
+
+       9500-RESET-TEST-STATE.
+           MOVE SPACES TO STATUS-CODE
+           MOVE SPACES TO WS-ERROR-REASON
+           MOVE SPACES TO WS-CONTENT-ID
+           MOVE SPACES TO WS-TRIGGER-TEXT
+           MOVE SPACES TO WS-GENERATED-TEXT
+           MOVE SPACES TO WS-IMAGE-REF
+           MOVE SPACES TO WS-VIRALITY-LEVEL
+           MOVE SPACES TO WS-SIMULATED-PREVIEW
+           MOVE 0 TO WS-REGEN-COUNT
+           MOVE 'Y' TO WS-SIMULATE-REGEN-BOOST
+           MOVE 'Y' TO WS-STEP-STATUS
+           MOVE SPACES TO WS-STEP-ERROR-MSG
+           MOVE 'N' TO WS-AUDIT-WRITE-FAILED
+           MOVE 'N' TO WS-AUDIT-TRAIL-DEGRADED
+           MOVE 'N' TO WS-AUDIT-FILE-OPEN.
+
+       9600-READ-LAST-AUDIT-ENTRY.
+           *> AUDIT-LOG-FILE es de solo-agregar: se relee desde el inicio
+           *> y se conserva la ultima entrada vista. 0500-RUN-PIPELINE ya
+           *> lo cerro en 9000-FINALIZE-PIPELINE antes de volver aqui.
+           MOVE SPACES TO WS-LAST-AUDIT-FROM-STATE
+           MOVE SPACES TO WS-LAST-AUDIT-TO-STATE
+           MOVE 'N' TO WS-TEST-EOF
+           OPEN INPUT AUDIT-LOG-FILE
+           PERFORM UNTIL WS-TEST-EOF = 'Y'
+               READ AUDIT-LOG-FILE
+                   AT END
+                       MOVE 'Y' TO WS-TEST-EOF
+                   NOT AT END
+                       MOVE AUDIT-FROM-STATE TO WS-LAST-AUDIT-FROM-STATE
+                       MOVE AUDIT-TO-STATE TO WS-LAST-AUDIT-TO-STATE
+               END-READ
+           END-PERFORM
+           CLOSE AUDIT-LOG-FILE.

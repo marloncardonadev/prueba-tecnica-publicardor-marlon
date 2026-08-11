@@ -1,0 +1,46 @@
+      *> VIRALITY-SCORE.CUT
+      *> Suite de cobol-unit-test para src/agents/VIRALITY-SCORE.cbl,
+      *> llamado directamente. Mismo aviso que en test/CONTENT-PIPELINE.
+      *> CUT: no se pudo correr contra el framework real en este entorno.
+      *> Los textos de prueba fueron verificados por fuera con un script
+      *> que replica INSPECT ... TALLYING ... FOR ALL, para confirmar el
+      *> conteo exacto de palabras clave antes de escribir el EXPECT.
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. VIRALITY-SCORE-TEST.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY "VIRALITY-SCORE-IO.cpy".
+
+       PROCEDURE DIVISION.
+
+           TESTSUITE 'VIRALITY-SCORE - umbral por conteo de palabras clave'
+
+           TESTCASE 'Cero coincidencias: LOW'
+           MOVE SPACES TO VIRALITY-SCORE-REQUEST
+           MOVE SPACES TO VIRALITY-SCORE-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas antiguos' TO VS-GENERATED-TEXT
+           CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+           EXPECT VS-STEP-STATUS TO BE 'Y'
+           EXPECT VS-VIRALITY-LEVEL TO BE 'LOW'
+
+           TESTCASE 'Una coincidencia (COBOL): MEDIUM'
+           MOVE SPACES TO VIRALITY-SCORE-REQUEST
+           MOVE SPACES TO VIRALITY-SCORE-RESPONSE
+           MOVE 'Cultura de equipos que mantienen sistemas COBOL antiguos' TO VS-GENERATED-TEXT
+           CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+           EXPECT VS-STEP-STATUS TO BE 'Y'
+           EXPECT VS-VIRALITY-LEVEL TO BE 'MEDIUM'
+
+           TESTCASE 'Cuatro coincidencias (IA, COBOL, LEGACY, MODERNIZ): HIGH'
+           MOVE SPACES TO VIRALITY-SCORE-REQUEST
+           MOVE SPACES TO VIRALITY-SCORE-RESPONSE
+           MOVE 'Modernizacion de COBOL con IA aplicada a sistemas legacy' TO VS-GENERATED-TEXT
+           CALL 'VIRALITY-SCORE' USING VIRALITY-SCORE-REQUEST VIRALITY-SCORE-RESPONSE
+           EXPECT VS-STEP-STATUS TO BE 'Y'
+           EXPECT VS-VIRALITY-LEVEL TO BE 'HIGH'
+
+           GOBACK.

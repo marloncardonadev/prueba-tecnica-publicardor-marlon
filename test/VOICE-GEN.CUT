@@ -1,0 +1,34 @@
+      *> VOICE-GEN.CUT
+      *> Suite de cobol-unit-test para src/agents/VOICE-GEN.cbl, llamado
+      *> directamente. Mismo aviso que en test/CONTENT-PIPELINE.CUT: no
+      *> se pudo correr contra el framework real en este entorno.
+      *>
+      *> VOICE-GEN es un placeholder honesto en esta v1 (no hay hipotesis
+      *> de voz documentada, tarea F1-03 de tasks.md, ni LLM-PORT real):
+      *> no tiene ninguna decision que tomar, asi que el unico caso real
+      *> que verificar es que siempre responda exito. La simulacion de
+      *> fallo de red se prueba mockeando este CALL desde
+      *> test/CONTENT-PIPELINE.CUT, no aqui.
+
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. VOICE-GEN-TEST.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY "VOICE-GEN-IO.cpy".
+
+       PROCEDURE DIVISION.
+
+           TESTSUITE 'VOICE-GEN - placeholder de perfil de voz'
+
+           TESTCASE 'Con un disparador valido, siempre responde exito'
+           MOVE SPACES TO VOICE-GEN-REQUEST
+           MOVE SPACES TO VOICE-GEN-RESPONSE
+           MOVE 'Modernizacion de COBOL con IA aplicada a sistemas legacy' TO VG-TRIGGER-TEXT
+           CALL 'VOICE-GEN' USING VOICE-GEN-REQUEST VOICE-GEN-RESPONSE
+           EXPECT VG-STEP-STATUS TO BE 'Y'
+           EXPECT VG-STEP-ERROR-MSG TO BE SPACES
+
+           GOBACK.

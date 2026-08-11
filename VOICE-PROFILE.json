@@ -1,0 +1,24 @@
+{
+  "voice_profile_id": "JLB-V1",
+  "research_basis": "REAL — basado en posts públicos de LinkedIn de Juan Lucas (COBOL GUY) Barbier, cofundador de COBOLpro",
+  "tone": "directo, contrarian, con autoridad de práctica (habla desde 'lo que he visto', no desde teoría)",
+  "sentence_length": "frases cortas y punzantes, párrafos de 1 línea, sin conectores largos",
+  "signature_moves": [
+    "abre con una creencia común de la industria y la desmiente en la misma línea",
+    "usa una cifra o dato de shock como gancho cuando aplica ($, años, %)",
+    "desglosa el argumento en 3-5 bullets accionables",
+    "cierra con una postura personal en primera persona, no con un CTA de marketing",
+    "usa mayúsculas puntuales para enfatizar el resultado, no el proceso"
+  ],
+  "avoid": [
+    "hype genérico de 'la IA lo cambia todo'",
+    "jerga de marketing ('sinergia', 'disrupción' sin sustancia)",
+    "emojis excesivos",
+    "consejos vagos sin ejemplo técnico concreto (JCL, VSAM, CICS, batch windows)"
+  ],
+  "example_hook": "Todos creen que COBOL está muerto. Los que factura de verdad saben que solo está mal vendido.",
+  "assumptions_marked_as_hypothesis": [
+    "nivel de humor: no hay suficiente señal pública para confirmar si usa humor deliberado; asumo humor seco/irónico ocasional, no chistes explícitos",
+    "frecuencia de emojis: no observada en los fragmentos disponibles; asumo cero por defecto, ajustable si se encuentra evidencia en contra"
+  ]
+}
